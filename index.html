@@ -2,788 +2,1223 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🦐 虾壳游戏工坊 - 测试版</title>
-    <!-- 使用jsdelivr CDN，国内访问更快 -->
-    <script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>🦐 虾壳游戏工坊</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif; background: #1a1a2e; color: white; overflow: hidden; }
-        
-        #app { min-height: 100vh; }
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #1a1a2e; color: white; overflow: hidden; touch-action: none; }
         
         /* 主菜单 */
-        .menu-screen { padding: 20px; text-align: center; }
-        .menu-screen h1 { font-size: 28px; margin: 20px 0; }
-        .menu-screen p { color: #aaa; margin-bottom: 30px; }
+        #menu { padding: 20px; text-align: center; min-height: 100vh; }
+        #menu h1 { font-size: 24px; margin: 20px 0; }
+        #menu p { color: #aaa; margin-bottom: 30px; font-size: 14px; }
+        .games-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; max-width: 360px; margin: 0 auto; }
+        .game-card { background: #2d3748; border-radius: 12px; padding: 16px; cursor: pointer; transition: all 0.2s; border: 2px solid transparent; }
+        .game-card:hover, .game-card:active { background: #4a5568; border-color: #667eea; }
+        .game-icon { font-size: 32px; margin-bottom: 8px; }
+        .game-title { font-size: 13px; font-weight: bold; }
+        .game-type { font-size: 11px; color: #aaa; margin-top: 4px; }
         
-        .games-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 15px; max-width: 600px; margin: 0 auto; }
-        .game-card { background: #2d3748; border-radius: 15px; padding: 20px; cursor: pointer; transition: all 0.3s; }
-        .game-card:hover { background: #4a5568; transform: translateY(-5px); }
-        .game-icon { font-size: 40px; margin-bottom: 10px; }
-        .game-title { font-size: 14px; font-weight: bold; }
-        .game-type { font-size: 12px; color: #aaa; margin-top: 5px; }
-        
-        /* 游戏容器 */
-        #game-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: none; }
-        #game-container.active { display: block; }
-        
-        .game-header { position: fixed; top: 0; left: 0; right: 0; background: rgba(0,0,0,0.8); padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; z-index: 100; }
-        .game-title-text { font-size: 18px; font-weight: bold; }
-        .back-btn { background: #f56565; color: white; border: none; padding: 8px 20px; border-radius: 20px; cursor: pointer; font-size: 14px; }
-        .back-btn:hover { background: #e53e3e; }
-        
-        #phaser-game { width: 100%; height: 100%; }
-        #phaser-game canvas { display: block; }
+        /* 游戏页面 */
+        #game-page { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #1a1a2e; }
+        #game-page.active { display: block; }
+        .game-header { position: fixed; top: 0; left: 0; right: 0; background: rgba(0,0,0,0.8); padding: 10px 16px; display: flex; justify-content: space-between; align-items: center; z-index: 10; }
+        .game-header-title { font-size: 16px; font-weight: bold; }
+        .back-btn { background: #f56565; color: white; border: none; padding: 6px 16px; border-radius: 20px; cursor: pointer; font-size: 13px; }
+        #game-canvas { display: block; margin-top: 50px; }
         
         /* 提示 */
-        .toast { position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: white; padding: 12px 24px; border-radius: 20px; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
-        .toast.show { opacity: 1; }
-        
-        /* 加载提示 */
-        .loading { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 20px; }
+        #hint { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.7); color: #aaa; padding: 8px 16px; border-radius: 20px; font-size: 13px; z-index: 10; }
+        #score-display { position: fixed; top: 55px; left: 16px; font-size: 20px; color: #ffd700; z-index: 10; }
     </style>
 </head>
 <body>
-    <div id="app">
-        <!-- 主菜单 -->
-        <div class="menu-screen" v-if="!isPlaying">
-            <h1>🦐 虾壳游戏工坊</h1>
-            <p>点击开始游戏！每款都是不同的玩法</p>
-            
-            <div class="games-grid">
-                <div class="game-card" v-for="game in games" :key="game.id" @click="playGame(game)">
-                    <div class="game-icon">{{ game.icon }}</div>
-                    <div class="game-title">{{ game.title }}</div>
-                    <div class="game-type">{{ game.type }}</div>
-                </div>
+    <!-- 主菜单 -->
+    <div id="menu">
+        <h1>🦐 虾壳游戏工坊</h1>
+        <p>点击开始游戏！</p>
+        <div class="games-grid">
+            <div class="game-card" onclick="startGame(1)">
+                <div class="game-icon">🏃</div>
+                <div class="game-title">超级跑酷</div>
+                <div class="game-type">点击跳跃</div>
+            </div>
+            <div class="game-card" onclick="startGame(2)">
+                <div class="game-icon">🎯</div>
+                <div class="game-title">像素射击</div>
+                <div class="game-type">点击射击</div>
+            </div>
+            <div class="game-card" onclick="startGame(3)">
+                <div class="game-icon">🧩</div>
+                <div class="game-title">数字滑块</div>
+                <div class="game-type">点击移动</div>
+            </div>
+            <div class="game-card" onclick="startGame(4)">
+                <div class="game-icon">⚔️</div>
+                <div class="game-title">勇者斗龙</div>
+                <div class="game-type">点击按钮</div>
+            </div>
+            <div class="game-card" onclick="startGame(5)">
+                <div class="game-icon">🏎️</div>
+                <div class="game-title">极速赛车</div>
+                <div class="game-type">点击切换</div>
+            </div>
+            <div class="game-card" onclick="startGame(6)">
+                <div class="game-icon">🐦</div>
+                <div class="game-title">跳跃小鸟</div>
+                <div class="game-type">点击飞行</div>
             </div>
         </div>
-        
-        <!-- 游戏容器 -->
-        <div id="game-container" :class="{ active: isPlaying }">
-            <div class="game-header">
-                <div class="game-title-text">🎮 {{ currentGame?.title }}</div>
-                <button class="back-btn" @click="exitGame">返回</button>
-            </div>
-            <div id="phaser-game"></div>
+    </div>
+    
+    <!-- 游戏页面 -->
+    <div id="game-page">
+        <div class="game-header">
+            <div class="game-header-title" id="game-title">🎮 游戏</div>
+            <button class="back-btn" onclick="exitGame()">返回</button>
         </div>
-        
-        <div class="toast" :class="{ show: toast.show }">{{ toast.message }}</div>
+        <div id="score-display"></div>
+        <canvas id="game-canvas"></canvas>
+        <div id="hint"></div>
     </div>
 
-    <script>
-        const { createApp } = Vue;
+<script>
+// ============ 通用游戏引擎 ============
+const canvas = document.getElementById('game-canvas');
+const ctx = canvas.getContext('2d');
 
-        // ============ 游戏场景定义 ============
+let currentGame = null;
+let animationId = null;
+
+function resizeCanvas() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight - 50;
+}
+
+function drawText(text, x, y, size, color, align) {
+    ctx.font = size + 'px sans-serif';
+    ctx.fillStyle = color;
+    ctx.textAlign = align || 'left';
+    ctx.fillText(text, x, y);
+}
+
+function drawRect(x, y, w, h, color) {
+    ctx.fillStyle = color;
+    ctx.fillRect(x, y, w, h);
+}
+
+function drawCircle(x, y, r, color) {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+}
+
+// ============ 游戏1: 跑酷 ============
+function startRunner() {
+    const state = {
+        player: { x: 80, y: 0, vy: 0, w: 35, h: 35 },
+        grounds: [],
+        coins: [],
+        spikes: [],
+        score: 0,
+        gameOver: false,
+        speed: 4,
+        groundY: 0
+    };
+    
+    function reset() {
+        resizeCanvas();
+        state.groundY = canvas.height - 30;
+        state.player.y = state.groundY - state.player.h;
+        state.player.vy = 0;
+        state.coins = [];
+        state.spikes = [];
+        state.score = 0;
+        state.gameOver = false;
+        state.speed = 4;
+        // 创建地面
+        state.grounds = [];
+        for (let i = 0; i < 15; i++) {
+            state.grounds.push({ x: i * 100, y: state.groundY, w: 100, h: 20 });
+        }
+    }
+    
+    function update() {
+        if (state.gameOver) return;
         
-        // 游戏1: 跑酷 - 点击/空格跳跃
-        const RunnerScene = {
-            key: 'RunnerScene',
-            preload: function() {
-                // 使用图形生成纹理
-                const g = this.make.graphics({ x: 0, y: 0, add: false });
-                g.fillStyle(0x667eea); g.fillRect(0, 0, 40, 40); g.generateTexture('player', 40, 40);
-                g.clear(); g.fillStyle(0x48bb78); g.fillRect(0, 0, 100, 20); g.generateTexture('ground', 100, 20);
-                g.clear(); g.fillStyle(0xffd700); g.fillCircle(15, 15, 15); g.generateTexture('coin', 30, 30);
-                g.clear(); g.fillStyle(0xf56565); g.fillRect(0, 0, 30, 30); g.generateTexture('spike', 30, 30);
-            },
-            create: function() {
-                this.score = 0;
-                this.isGameOver = false;
-                this.gameSpeed = 200;
-                
-                const w = this.scale.width;
-                const h = this.scale.height;
-                
-                // 地面
-                this.grounds = this.physics.add.staticGroup();
-                for (let i = 0; i < 20; i++) {
-                    this.grounds.create(50 + i * 100, h - 30, 'ground');
-                }
-                
-                // 玩家
-                this.player = this.physics.add.sprite(100, h - 100, 'player');
-                this.player.setCollideWorldBounds(true);
-                this.physics.add.collider(this.player, this.grounds);
-                
-                // 金币组
-                this.coins = this.physics.add.group();
-                this.physics.add.overlap(this.player, this.coins, (p, c) => {
-                    c.destroy();
-                    this.score += 10;
-                    this.scoreText.setText('分数: ' + this.score);
-                });
-                
-                // 障碍组
-                this.spikes = this.physics.add.group();
-                this.physics.add.collider(this.spikes, this.grounds);
-                this.physics.add.overlap(this.player, this.spikes, () => {
-                    this.gameOver();
-                });
-                
-                // 定时生成
-                this.spawnEvent = this.time.addEvent({ 
-                    delay: 1500, 
-                    callback: this.spawnObjects, 
-                    callbackScope: this,
-                    loop: true 
-                });
-                
-                // UI
-                this.scoreText = this.add.text(20, 60, '分数: 0', { fontSize: '24px', fill: '#fff' });
-                this.add.text(20, 100, '点击屏幕或按空格键跳跃', { fontSize: '16px', fill: '#aaa' });
-                
-                // 控制
-                this.input.on('pointerdown', () => this.jump());
-                this.input.keyboard.on('keydown-SPACE', () => this.jump());
-            },
-            spawnObjects: function() {
-                if (this.isGameOver) return;
-                const w = this.scale.width;
-                const h = this.scale.height;
-                const x = w + 50;
-                
-                // 金币
-                const coinY = h - 100 - Math.random() * 80;
-                const coin = this.coins.create(x, coinY, 'coin');
-                coin.body.allowGravity = false;
-                coin.setVelocityX(-this.gameSpeed);
-                
-                // 障碍
-                if (Math.random() > 0.4) {
-                    const spike = this.spikes.create(x + 150, h - 60, 'spike');
-                    spike.body.allowGravity = false;
-                    spike.setVelocityX(-this.gameSpeed);
-                }
-            },
-            update: function() {
-                if (this.isGameOver) return;
-                
-                // 移除出界物体
-                this.coins.children.iterate(c => { if (c && c.x < -50) c.destroy(); });
-                this.spikes.children.iterate(s => { if (s && s.x < -50) s.destroy(); });
-            },
-            jump: function() {
-                if (!this.isGameOver && this.player.body.touching.down) {
-                    this.player.setVelocityY(-400);
-                }
-            },
-            gameOver: function() {
-                this.isGameOver = true;
-                this.spawnEvent.remove();
-                this.physics.pause();
-                this.add.text(this.scale.width/2, this.scale.height/2, '游戏结束！点击重玩', { fontSize: '24px', fill: '#fff' }).setOrigin(0.5);
-                this.input.once('pointerdown', () => this.scene.restart());
-                this.input.keyboard.once('keydown-SPACE', () => this.scene.restart());
+        // 重力
+        state.player.vy += 0.5;
+        state.player.y += state.player.vy;
+        
+        // 地面碰撞
+        if (state.player.y >= state.groundY - state.player.h) {
+            state.player.y = state.groundY - state.player.h;
+            state.player.vy = 0;
+        }
+        
+        // 移动地面和物体
+        for (let g of state.grounds) {
+            g.x -= state.speed;
+            if (g.x + g.w < 0) g.x += 1500;
+        }
+        
+        // 生成金币和障碍
+        if (Math.random() < 0.02) {
+            const type = Math.random();
+            if (type < 0.6) {
+                state.coins.push({ x: canvas.width + 20, y: state.groundY - 80 - Math.random() * 60, r: 12 });
+            } else {
+                state.spikes.push({ x: canvas.width + 20, y: state.groundY - 20, w: 25, h: 25 });
             }
-        };
+        }
         
-        // 游戏2: 射击 - 鼠标移动控制，点击射击
-        const ShooterScene = {
-            key: 'ShooterScene',
-            preload: function() {
-                const g = this.make.graphics({ x: 0, y: 0, add: false });
-                g.fillStyle(0x667eea); g.fillRect(0, 0, 50, 30); g.generateTexture('ship', 50, 30);
-                g.clear(); g.fillStyle(0xf56565); g.fillRect(0, 0, 40, 40); g.generateTexture('enemy', 40, 40);
-                g.clear(); g.fillStyle(0xffd700); g.fillRect(0, 0, 6, 15); g.generateTexture('bullet', 6, 15);
-            },
-            create: function() {
-                this.score = 0;
-                this.isGameOver = false;
-                const w = this.scale.width;
-                const h = this.scale.height;
-                
-                // 玩家
-                this.player = this.physics.add.sprite(80, h / 2, 'ship');
-                this.player.setCollideWorldBounds(true);
-                this.player.body.allowGravity = false;
-                
-                // 子弹组
-                this.bullets = this.physics.add.group();
-                
-                // 敌人组
-                this.enemies = this.physics.add.group();
-                
-                // 子弹击中敌人
-                this.physics.add.overlap(this.bullets, this.enemies, (b, e) => {
-                    b.destroy();
-                    e.destroy();
-                    this.score += 10;
-                    this.scoreText.setText('分数: ' + this.score);
-                });
-                
-                // 敌人碰到玩家
-                this.physics.add.overlap(this.player, this.enemies, () => {
-                    this.gameOver();
-                });
-                
-                // 定时生成敌人
-                this.spawnEvent = this.time.addEvent({ 
-                    delay: 1000, 
-                    callback: () => {
-                        if (this.isGameOver) return;
-                        const enemy = this.enemies.create(w + 20, Phaser.Math.Between(50, h - 50), 'enemy');
-                        enemy.body.allowGravity = false;
-                        enemy.setVelocityX(-150);
-                    }, 
-                    loop: true 
-                });
-                
-                // 鼠标控制
-                this.input.on('pointermove', (pointer) => {
-                    if (!this.isGameOver) {
-                        this.player.y = pointer.y;
-                    }
-                });
-                
-                this.input.on('pointerdown', () => {
-                    if (this.isGameOver) return;
-                    const bullet = this.bullets.create(this.player.x + 30, this.player.y, 'bullet');
-                    bullet.body.allowGravity = false;
-                    bullet.setVelocityX(400);
-                });
-                
-                // UI
-                this.scoreText = this.add.text(20, 60, '分数: 0', { fontSize: '24px', fill: '#fff' });
-                this.add.text(20, 100, '移动鼠标控制飞船，点击射击', { fontSize: '16px', fill: '#aaa' });
-            },
-            update: function() {
-                if (this.isGameOver) return;
-                this.bullets.children.iterate(b => { if (b && b.x > this.scale.width) b.destroy(); });
-                this.enemies.children.iterate(e => { if (e && e.x < -50) e.destroy(); });
-            },
-            gameOver: function() {
-                this.isGameOver = true;
-                this.spawnEvent.remove();
-                this.physics.pause();
-                this.add.text(this.scale.width/2, this.scale.height/2, '游戏结束！点击重玩', { fontSize: '24px', fill: '#fff' }).setOrigin(0.5);
-                this.input.once('pointerdown', () => this.scene.restart());
+        // 移动金币
+        for (let c of state.coins) {
+            c.x -= state.speed;
+        }
+        state.coins = state.coins.filter(c => c.x > -30);
+        
+        // 移动障碍
+        for (let s of state.spikes) {
+            s.x -= state.speed;
+        }
+        state.spikes = state.spikes.filter(s => s.x > -30);
+        
+        // 碰撞检测 - 金币
+        for (let i = state.coins.length - 1; i >= 0; i--) {
+            const c = state.coins[i];
+            if (Math.abs(state.player.x + state.player.w/2 - c.x) < 30 && Math.abs(state.player.y + state.player.h/2 - c.y) < 30) {
+                state.coins.splice(i, 1);
+                state.score += 10;
             }
-        };
+        }
         
-        // 游戏3: 解谜 (数字滑块) - 点击数字移动
-        const PuzzleScene = {
-            key: 'PuzzleScene',
-            preload: function() {},
-            create: function() {
-                this.moves = 0;
-                this.size = 3;
-                this.tileSize = 80;
-                this.tiles = [];
-                this.isWin = false;
+        // 碰撞检测 - 障碍
+        for (let s of state.spikes) {
+            if (state.player.x < s.x + s.w && state.player.x + state.player.w > s.x &&
+                state.player.y < s.y + s.h && state.player.y + state.player.h > s.y) {
+                state.gameOver = true;
+                state.speed = 0;
+            }
+        }
+    }
+    
+    function draw() {
+        ctx.fillStyle = '#1a1a2e';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // 地面
+        for (let g of state.grounds) {
+            drawRect(g.x, g.y, g.w, g.h, '#48bb78');
+        }
+        
+        // 金币
+        for (let c of state.coins) {
+            drawCircle(c.x, c.y, c.r, '#ffd700');
+        }
+        
+        // 障碍
+        for (let s of state.spikes) {
+            drawRect(s.x, s.y, s.w, s.h, '#f56565');
+        }
+        
+        // 玩家
+        drawRect(state.player.x, state.player.y, state.player.w, state.player.h, '#667eea');
+        
+        // 分数
+        document.getElementById('score-display').textContent = '分数: ' + state.score;
+        
+        if (state.gameOver) {
+            ctx.fillStyle = 'rgba(0,0,0,0.6)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            drawText('游戏结束！', canvas.width/2, canvas.height/2 - 20, 28, '#fff', 'center');
+            drawText('点击重新开始', canvas.width/2, canvas.height/2 + 20, 18, '#aaa', 'center');
+        }
+    }
+    
+    function loop() {
+        update();
+        draw();
+        animationId = requestAnimationFrame(loop);
+    }
+    
+    function jump() {
+        if (!state.gameOver && state.player.vy === 0) {
+            state.player.vy = -12;
+        }
+    }
+    
+    reset();
+    document.getElementById('hint').textContent = '点击跳跃';
+    
+    const handler = (e) => { e.preventDefault(); jump(); };
+    canvas.addEventListener('touchstart', handler, { passive: false });
+    canvas.addEventListener('mousedown', handler);
+    document.addEventListener('keydown', (e) => { if (e.code === 'Space') { e.preventDefault(); jump(); } });
+    
+    state.canvasHandler = handler;
+    loop();
+    
+    return {
+        restart: () => {
+            canvas.removeEventListener('touchstart', state.canvasHandler);
+            canvas.removeEventListener('mousedown', state.canvasHandler);
+            reset();
+        }
+    };
+}
+
+// ============ 游戏2: 射击 ============
+function startShooter() {
+    const state = {
+        player: { x: 60, y: 0, w: 40, h: 25 },
+        bullets: [],
+        enemies: [],
+        score: 0,
+        gameOver: false,
+        mouseY: 0
+    };
+    
+    function reset() {
+        resizeCanvas();
+        state.player.y = canvas.height / 2;
+        state.bullets = [];
+        state.enemies = [];
+        state.score = 0;
+        state.gameOver = false;
+    }
+    
+    function update() {
+        if (state.gameOver) return;
+        
+        // 移动玩家
+        state.player.y += (state.mouseY - state.player.y) * 0.1;
+        state.player.y = Math.max(20, Math.min(canvas.height - 40, state.player.y));
+        
+        // 移动子弹
+        for (let b of state.bullets) {
+            b.x += 8;
+        }
+        state.bullets = state.bullets.filter(b => b.x < canvas.width + 10);
+        
+        // 生成敌人
+        if (Math.random() < 0.025) {
+            state.enemies.push({ x: canvas.width + 20, y: 40 + Math.random() * (canvas.height - 80), w: 35, h: 35, vx: -3 });
+        }
+        
+        // 移动敌人
+        for (let e of state.enemies) {
+            e.x += e.vx;
+        }
+        state.enemies = state.enemies.filter(e => e.x > -40);
+        
+        // 子弹击中敌人
+        for (let i = state.bullets.length - 1; i >= 0; i--) {
+            for (let j = state.enemies.length - 1; j >= 0; j--) {
+                const b = state.bullets[i];
+                const e = state.enemies[j];
+                if (b && e && b.x > e.x && b.x < e.x + e.w && b.y > e.y && b.y < e.y + e.h) {
+                    state.bullets.splice(i, 1);
+                    state.enemies.splice(j, 1);
+                    state.score += 10;
+                    break;
+                }
+            }
+        }
+        
+        // 敌人碰到玩家
+        for (let e of state.enemies) {
+            if (state.player.x < e.x + e.w && state.player.x + state.player.w > e.x &&
+                state.player.y < e.y + e.h && state.player.y + state.player.h > e.y) {
+                state.gameOver = true;
+            }
+        }
+    }
+    
+    function draw() {
+        ctx.fillStyle = '#1a1a2e';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // 玩家飞船
+        ctx.fillStyle = '#667eea';
+        ctx.fillRect(state.player.x, state.player.y, state.player.w, state.player.h);
+        // 尾部火焰
+        ctx.fillStyle = '#ff6b6b';
+        ctx.fillRect(state.player.x - 10, state.player.y + 8, 12, 8);
+        
+        // 子弹
+        ctx.fillStyle = '#ffd700';
+        for (let b of state.bullets) {
+            ctx.fillRect(b.x, b.y - 2, 15, 4);
+        }
+        
+        // 敌人
+        ctx.fillStyle = '#f56565';
+        for (let e of state.enemies) {
+            ctx.fillRect(e.x, e.y, e.w, e.h);
+        }
+        
+        document.getElementById('score-display').textContent = '分数: ' + state.score;
+        
+        if (state.gameOver) {
+            ctx.fillStyle = 'rgba(0,0,0,0.6)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            drawText('游戏结束！', canvas.width/2, canvas.height/2 - 20, 28, '#fff', 'center');
+            drawText('点击重新开始', canvas.width/2, canvas.height/2 + 20, 18, '#aaa', 'center');
+        }
+    }
+    
+    function loop() {
+        update();
+        draw();
+        animationId = requestAnimationFrame(loop);
+    }
+    
+    function shoot() {
+        if (!state.gameOver) {
+            state.bullets.push({ x: state.player.x + state.player.w, y: state.player.y + state.player.h / 2 });
+        }
+    }
+    
+    reset();
+    document.getElementById('hint').textContent = '移动鼠标，点击射击';
+    
+    canvas.addEventListener('mousemove', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        state.mouseY = e.clientY - rect.top;
+    });
+    
+    canvas.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        const rect = canvas.getBoundingClientRect();
+        state.mouseY = e.touches[0].clientY - rect.top;
+    }, { passive: false });
+    
+    const downHandler = (e) => { e.preventDefault(); shoot(); };
+    canvas.addEventListener('mousedown', downHandler);
+    canvas.addEventListener('touchstart', downHandler, { passive: false });
+    
+    state.downHandler = downHandler;
+    loop();
+    
+    return {
+        restart: () => {
+            canvas.removeEventListener('mousedown', state.downHandler);
+            canvas.removeEventListener('touchstart', state.downHandler);
+            reset();
+        }
+    };
+}
+
+// ============ 游戏3: 数字滑块 ============
+function startPuzzle() {
+    const state = {
+        tiles: [],      // {value, row, col, x, y, targetX, targetY}
+        emptyIdx: 8,
+        moves: 0,
+        isWin: false,
+        tileSize: 70,
+        gridSize: 3,
+        colors: ['#667eea', '#48bb78', '#ffd700', '#f56565', '#9f7aea', '#38b2ac', '#ed8936', '#e53e3e'],
+        animProgress: []  // 每个tile的移动动画进度
+    };
+    
+    function reset() {
+        resizeCanvas();
+        state.tiles = [];
+        state.moves = 0;
+        state.isWin = false;
+        
+        const totalW = state.gridSize * state.tileSize;
+        const totalH = state.gridSize * state.tileSize;
+        const startX = (canvas.width - totalW) / 2;
+        const startY = (canvas.height - totalH) / 2 - 20;
+        state.startX = startX;
+        state.startY = startY;
+        
+        // 创建tiles
+        for (let i = 0; i < 9; i++) {
+            const row = Math.floor(i / 3);
+            const col = i % 3;
+            const x = startX + col * state.tileSize;
+            const y = startY + row * state.tileSize;
+            state.tiles.push({
+                value: i < 8 ? i + 1 : 0,
+                row: row, col: col,
+                x: x, y: y,
+                targetX: x, targetY: y
+            });
+        }
+        state.emptyIdx = 8;
+        
+        // 打乱
+        for (let i = 0; i < 100; i++) {
+            const neighbors = getNeighbors(state.emptyIdx);
+            const ni = neighbors[Math.floor(Math.random() * neighbors.length)];
+            swapTiles(state.emptyIdx, ni, false);
+        }
+    }
+    
+    function getNeighbors(idx) {
+        const neighbors = [];
+        const row = state.tiles[idx].row;
+        const col = state.tiles[idx].col;
+        if (row > 0) neighbors.push(idx - 3);
+        if (row < 2) neighbors.push(idx + 3);
+        if (col > 0) neighbors.push(idx - 1);
+        if (col < 2) neighbors.push(idx + 1);
+        return neighbors;
+    }
+    
+    function swapTiles(i, j, animate) {
+        const t1 = state.tiles[i];
+        const t2 = state.tiles[j];
+        
+        // 交换位置
+        const tempRow = t1.row; const tempCol = t1.col;
+        t1.row = t2.row; t1.col = t2.col;
+        t2.row = tempRow; t2.col = tempCol;
+        
+        // 交换目标位置
+        t1.targetX = state.startX + t1.col * state.tileSize;
+        t1.targetY = state.startY + t1.row * state.tileSize;
+        t2.targetX = state.startX + t2.col * state.tileSize;
+        t2.targetY = state.startY + t2.row * state.tileSize;
+        
+        if (!animate) {
+            t1.x = t1.targetX; t1.y = t1.targetY;
+            t2.x = t2.targetX; t2.y = t2.targetY;
+        }
+        
+        // 交换数组位置
+        [state.tiles[i], state.tiles[j]] = [state.tiles[j], state.tiles[i]];
+        
+        // 更新空tile索引
+        if (t1.value === 0) state.emptyIdx = j;
+        else if (t2.value === 0) state.emptyIdx = i;
+    }
+    
+    function checkWin() {
+        for (let i = 0; i < 8; i++) {
+            if (state.tiles[i].value !== i + 1) return false;
+        }
+        return state.tiles[8].value === 0;
+    }
+    
+    function update() {
+        // 平滑移动动画
+        for (let t of state.tiles) {
+            if (t.value === 0) continue;
+            if (Math.abs(t.x - t.targetX) > 0.5 || Math.abs(t.y - t.targetY) > 0.5) {
+                t.x += (t.targetX - t.x) * 0.3;
+                t.y += (t.targetY - t.y) * 0.3;
+            } else {
+                t.x = t.targetX;
+                t.y = t.targetY;
+            }
+        }
+    }
+    
+    function draw() {
+        ctx.fillStyle = '#1a1a2e';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // 画tile
+        for (let t of state.tiles) {
+            if (t.value === 0) continue;
+            const x = t.x + 2;
+            const y = t.y + 2;
+            const w = state.tileSize - 4;
+            const h = state.tileSize - 4;
+            
+            ctx.fillStyle = state.colors[t.value - 1];
+            ctx.beginPath();
+            ctx.roundRect(x, y, w, h, 8);
+            ctx.fill();
+            
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 28px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(t.value, x + w/2, y + h/2);
+        }
+        
+        document.getElementById('score-display').textContent = '步数: ' + state.moves;
+        
+        if (state.isWin) {
+            ctx.fillStyle = 'rgba(0,0,0,0.7)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.font = 'bold 32px sans-serif';
+            ctx.fillStyle = '#ffd700';
+            ctx.textAlign = 'center';
+            ctx.fillText('🎉 恭喜通关！', canvas.width/2, canvas.height/2 - 20);
+            ctx.font = '18px sans-serif';
+            ctx.fillStyle = '#fff';
+            ctx.fillText('步数: ' + state.moves + '  点击重新开始', canvas.width/2, canvas.height/2 + 20);
+        }
+    }
+    
+    function loop() {
+        update();
+        draw();
+        animationId = requestAnimationFrame(loop);
+    }
+    
+    function handleClick(e) {
+        if (state.isWin) {
+            reset();
+            return;
+        }
+        
+        const rect = canvas.getBoundingClientRect();
+        const clickX = (e.clientX || e.touches[0].clientX) - rect.left;
+        const clickY = (e.clientY || e.touches[0].clientY) - rect.top;
+        
+        for (let i = 0; i < state.tiles.length; i++) {
+            const t = state.tiles[i];
+            if (t.value === 0) continue;
+            if (clickX >= t.x && clickX <= t.x + state.tileSize &&
+                clickY >= t.y && clickY <= t.y + state.tileSize) {
                 
-                const colors = [0x667eea, 0x48bb78, 0xffd700, 0xf56565, 0x9f7aea, 0x38b2ac, 0xed8936, 0xe53e3e];
-                const w = this.scale.width;
-                const h = this.scale.height;
-                const startX = (w - this.size * this.tileSize) / 2;
-                const startY = (h - this.size * this.tileSize) / 2;
-                
-                // 创建数字块
-                for (let i = 0; i < 9; i++) {
-                    const row = Math.floor(i / 3);
-                    const col = i % 3;
-                    const x = startX + col * this.tileSize + this.tileSize / 2;
-                    const y = startY + row * this.tileSize + this.tileSize / 2;
+                // 检查是否和empty相邻
+                const neighbors = getNeighbors(i);
+                if (neighbors.includes(state.emptyIdx)) {
+                    swapTiles(i, state.emptyIdx, true);
+                    state.moves++;
                     
-                    if (i < 8) {
-                        const tile = this.add.rectangle(x, y, 70, 70, colors[i]).setInteractive();
-                        const text = this.add.text(x, y, String(i + 1), { fontSize: '32px', fill: '#fff' }).setOrigin(0.5);
-                        this.tiles.push({ rect: tile, text: text, value: i + 1, row: row, col: col, x: x, y: y });
-                    } else {
-                        this.tiles.push({ rect: null, text: null, value: 0, row: row, col: col, x: x, y: y });
+                    if (checkWin()) {
+                        state.isWin = true;
                     }
                 }
+                break;
+            }
+        }
+    }
+    
+    reset();
+    document.getElementById('hint').textContent = '点击数字移到空白处';
+    
+    canvas.addEventListener('click', handleClick);
+    canvas.addEventListener('touchstart', (e) => { e.preventDefault(); handleClick(e); }, { passive: false });
+    
+    state.clickHandler = handleClick;
+    loop();
+    
+    return {
+        restart: () => {
+            canvas.removeEventListener('click', state.clickHandler);
+            canvas.removeEventListener('touchstart', state.clickHandler);
+            reset();
+        }
+    };
+}
+
+// ============ 游戏4: RPG战斗 ============
+function startRPG() {
+    const state = {
+        heroHP: 100, heroMaxHP: 100,
+        dragonHP: 150, dragonMaxHP: 150,
+        isHeroTurn: true,
+        gameOver: false,
+        log: '轮到你行动了！',
+        logTimer: 0
+    };
+    
+    let buttons = [];
+    
+    function reset() {
+        resizeCanvas();
+        state.heroHP = 100; state.heroMaxHP = 100;
+        state.dragonHP = 150; state.dragonMaxHP = 150;
+        state.isHeroTurn = true;
+        state.gameOver = false;
+        state.log = '轮到你行动了！';
+        state.logTimer = 0;
+        
+        const bw = 110, bh = 45;
+        const cx = canvas.width / 2;
+        const by = canvas.height - 130;
+        buttons = [
+            { x: cx - 60, y: by, w: bw, h: bh, text: '⚔️ 攻击', color: '#f56565', action: 'attack' },
+            { x: cx + 60, y: by, w: bw, h: bh, text: '💚 治疗', color: '#48bb78', action: 'heal' }
+        ];
+    }
+    
+    function update() {
+        if (state.logTimer > 0) state.logTimer--;
+    }
+    
+    function draw() {
+        ctx.fillStyle = '#1a1a2e';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        const cx = canvas.width / 2;
+        const cy = canvas.height / 2 - 60;
+        
+        // 背景装饰
+        ctx.fillStyle = '#16213e';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // 分割线
+        ctx.fillStyle = '#333';
+        ctx.fillRect(cx - 2, 80, 4, canvas.height - 200);
+        
+        // 英雄
+        ctx.fillStyle = '#667eea';
+        ctx.beginPath();
+        ctx.arc(100, cy, 40, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.font = '16px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('勇者', 100, cy + 65);
+        
+        // HP条背景
+        ctx.fillStyle = '#333';
+        ctx.fillRect(50, cy + 80, 104, 16);
+        // HP条
+        ctx.fillStyle = '#48bb78';
+        ctx.fillRect(52, cy + 82, (state.heroHP / state.heroMaxHP) * 100, 12);
+        ctx.fillStyle = '#fff';
+        ctx.font = '12px sans-serif';
+        ctx.fillText(state.heroHP + '/' + state.heroMaxHP, 102, cy + 93);
+        
+        // 龙
+        ctx.fillStyle = '#f56565';
+        ctx.beginPath();
+        ctx.arc(canvas.width - 100, cy, 50, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.font = '16px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('恶龙', canvas.width - 100, cy + 70);
+        
+        // 龙HP条背景
+        ctx.fillStyle = '#333';
+        ctx.fillRect(canvas.width - 152, cy + 80, 104, 16);
+        // 龙HP条
+        ctx.fillStyle = '#f56565';
+        ctx.fillRect(canvas.width - 150, cy + 82, (state.dragonHP / state.dragonMaxHP) * 100, 12);
+        ctx.fillStyle = '#fff';
+        ctx.font = '12px sans-serif';
+        ctx.fillText(state.dragonHP + '/' + state.dragonMaxHP, canvas.width - 100, cy + 93);
+        
+        // 战斗日志
+        ctx.fillStyle = '#ffd700';
+        ctx.font = '18px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(state.log, cx, 60);
+        
+        // 按钮
+        for (let btn of buttons) {
+            ctx.fillStyle = btn.color;
+            ctx.beginPath();
+            ctx.roundRect(btn.x, btn.y, btn.w, btn.h, 10);
+            ctx.fill();
+            ctx.fillStyle = '#fff';
+            ctx.font = '16px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(btn.text, btn.x + btn.w/2, btn.y + btn.h/2);
+        }
+        
+        document.getElementById('score-display').textContent = '';
+        
+        if (state.gameOver) {
+            ctx.fillStyle = 'rgba(0,0,0,0.5)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = state.heroHP > 0 ? '#ffd700' : '#f56565';
+            ctx.font = 'bold 28px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(state.heroHP > 0 ? '🎉 胜利！' : '💀 失败！', cx, canvas.height/2 - 20);
+            ctx.fillStyle = '#aaa';
+            ctx.font = '16px sans-serif';
+            ctx.fillText('点击重新开始', cx, canvas.height/2 + 20);
+        }
+    }
+    
+    function loop() {
+        update();
+        draw();
+        animationId = requestAnimationFrame(loop);
+    }
+    
+    function handleClick(e) {
+        if (state.gameOver) {
+            reset();
+            return;
+        }
+        if (!state.isHeroTurn) return;
+        
+        const rect = canvas.getBoundingClientRect();
+        const clickX = (e.clientX || e.touches[0].clientX) - rect.left;
+        const clickY = (e.clientY || e.touches[0].clientY) - rect.top;
+        
+        for (let btn of buttons) {
+            if (clickX >= btn.x && clickX <= btn.x + btn.w &&
+                clickY >= btn.y && clickY <= btn.y + btn.h) {
                 
-                this.emptyTile = this.tiles[8];
-                this.startX = startX;
-                this.startY = startY;
-                
-                // 打乱（同时更新视觉位置）
-                for (let i = 0; i < 100; i++) {
-                    this.randomMove(true);
-                }
-                
-                // 点击控制
-                this.input.on('gameobjectdown', (pointer, gameObject) => {
-                    if (this.isWin) return;
-                    const tile = this.tiles.find(t => t.rect === gameObject);
-                    if (tile) this.tryMove(tile);
-                });
-                
-                // UI
-                this.movesText = this.add.text(20, 60, '步数: 0', { fontSize: '24px', fill: '#fff' });
-                this.add.text(20, 100, '点击数字移动到空白处，按顺序排列1-8', { fontSize: '16px', fill: '#aaa' });
-            },
-            tryMove: function(tile) {
-                const empty = this.emptyTile;
-                const rowDiff = Math.abs(tile.row - empty.row);
-                const colDiff = Math.abs(tile.col - empty.col);
-                
-                if ((rowDiff === 1 && colDiff === 0) || (rowDiff === 0 && colDiff === 1)) {
-                    // 交换位置
-                    const emptyX = this.startX + empty.col * this.tileSize + this.tileSize / 2;
-                    const emptyY = this.startY + empty.row * this.tileSize + this.tileSize / 2;
+                if (btn.action === 'attack') {
+                    const dmg = 15 + Math.floor(Math.random() * 11);
+                    state.dragonHP = Math.max(0, state.dragonHP - dmg);
+                    state.log = '你造成 ' + dmg + ' 点伤害！';
                     
-                    tile.rect.setPosition(emptyX, emptyY);
-                    tile.text.setPosition(emptyX, emptyY);
-                    
-                    const tempRow = tile.row;
-                    const tempCol = tile.col;
-                    tile.row = empty.row;
-                    tile.col = empty.col;
-                    empty.row = tempRow;
-                    empty.col = tempCol;
-                    
-                    this.moves++;
-                    this.movesText.setText('步数: ' + this.moves);
-                    
-                    this.checkWin();
-                }
-            },
-            randomMove: function(isShuffle = false) {
-                const empty = this.emptyTile;
-                const neighbors = [];
-                
-                for (let tile of this.tiles) {
-                    if (tile.value === 0) continue;
-                    const rowDiff = Math.abs(tile.row - empty.row);
-                    const colDiff = Math.abs(tile.col - empty.col);
-                    if ((rowDiff === 1 && colDiff === 0) || (rowDiff === 0 && colDiff === 1)) {
-                        neighbors.push(tile);
-                    }
-                }
-                
-                if (neighbors.length > 0) {
-                    const tile = neighbors[Math.floor(Math.random() * neighbors.length)];
-                    
-                    if (isShuffle) {
-                        // 打乱时只交换逻辑位置
-                        const tempRow = tile.row;
-                        const tempCol = tile.col;
-                        tile.row = empty.row;
-                        tile.col = empty.col;
-                        empty.row = tempRow;
-                        empty.col = tempCol;
-                        
-                        // 更新视觉位置
-                        const newX = this.startX + tile.col * this.tileSize + this.tileSize / 2;
-                        const newY = this.startY + tile.row * this.tileSize + this.tileSize / 2;
-                        tile.rect.setPosition(newX, newY);
-                        tile.text.setPosition(newX, newY);
-                    }
-                }
-            },
-            checkWin: function() {
-                for (let i = 0; i < 8; i++) {
-                    const tile = this.tiles.find(t => t.value === i + 1);
-                    const expectedRow = Math.floor(i / 3);
-                    const expectedCol = i % 3;
-                    if (tile.row !== expectedRow || tile.col !== expectedCol) {
+                    if (state.dragonHP <= 0) {
+                        state.gameOver = true;
                         return;
                     }
+                } else if (btn.action === 'heal') {
+                    const heal = 15 + Math.floor(Math.random() * 11);
+                    state.heroHP = Math.min(state.heroMaxHP, state.heroHP + heal);
+                    state.log = '你恢复 ' + heal + ' 点生命！';
                 }
                 
-                this.isWin = true;
-                this.add.text(this.scale.width/2, this.scale.height/2 - 50, '🎉 恭喜通关！', { fontSize: '32px', fill: '#ffd700' }).setOrigin(0.5);
-                this.add.text(this.scale.width/2, this.scale.height/2 + 20, '点击重玩', { fontSize: '24px', fill: '#fff' }).setOrigin(0.5);
-                this.input.once('pointerdown', () => this.scene.restart());
-            }
-        };
-        
-        // 游戏4: RPG战斗 - 点击按钮攻击/治疗
-        const RPGScene = {
-            key: 'RPGScene',
-            preload: function() {
-                const g = this.make.graphics({ x: 0, y: 0, add: false });
-                g.fillStyle(0x667eea); g.fillRect(0, 0, 60, 60); g.generateTexture('hero', 60, 60);
-                g.clear(); g.fillStyle(0xf56565); g.fillRect(0, 0, 80, 80); g.generateTexture('dragon', 80, 80);
-            },
-            create: function() {
-                this.heroHP = 100;
-                this.heroMaxHP = 100;
-                this.dragonHP = 150;
-                this.dragonMaxHP = 150;
-                this.isHeroTurn = true;
-                this.isGameOver = false;
-                const w = this.scale.width;
-                const h = this.scale.height;
-                
-                // 英雄
-                this.hero = this.add.image(120, h / 2, 'hero');
-                this.heroName = this.add.text(120, h / 2 + 50, '勇者', { fontSize: '20px', fill: '#fff' }).setOrigin(0.5);
-                
-                // 龙
-                this.dragon = this.add.image(w - 120, h / 2, 'dragon');
-                this.dragonName = this.add.text(w - 120, h / 2 + 50, '恶龙', { fontSize: '20px', fill: '#fff' }).setOrigin(0.5);
-                
-                // HP条背景
-                this.add.rectangle(120, h / 2 + 80, 104, 19, 0x333333);
-                this.add.rectangle(w - 120, h / 2 + 80, 104, 19, 0x333333);
-                
-                // HP条
-                this.heroHPBar = this.add.rectangle(120, h / 2 + 80, 100, 15, 0x48bb78);
-                this.dragonHPBar = this.add.rectangle(w - 120, h / 2 + 80, 100, 15, 0xf56565);
-                
-                this.heroHPText = this.add.text(120, h / 2 + 110, '100/100', { fontSize: '16px', fill: '#fff' }).setOrigin(0.5);
-                this.dragonHPText = this.add.text(w - 120, h / 2 + 110, '150/150', { fontSize: '16px', fill: '#fff' }).setOrigin(0.5);
-                
-                // 按钮
-                this.attackBtn = this.add.rectangle(w / 2, h - 140, 120, 50, 0xf56565)
-                    .setInteractive()
-                    .on('pointerdown', () => this.attack())
-                    .on('pointerover', () => this.attackBtn.setFillStyle(0xe53e3e))
-                    .on('pointerout', () => this.attackBtn.setFillStyle(0xf56565));
-                this.add.text(w / 2, h - 140, '⚔️ 攻击', { fontSize: '20px', fill: '#fff' }).setOrigin(0.5);
-                
-                this.healBtn = this.add.rectangle(w / 2, h - 70, 120, 50, 0x48bb78)
-                    .setInteractive()
-                    .on('pointerdown', () => this.heal())
-                    .on('pointerover', () => this.healBtn.setFillStyle(0x38a169))
-                    .on('pointerout', () => this.healBtn.setFillStyle(0x48bb78));
-                this.add.text(w / 2, h - 70, '💚 治疗', { fontSize: '20px', fill: '#fff' }).setOrigin(0.5);
-                
-                // 战斗日志
-                this.logText = this.add.text(20, 60, '轮到你行动了！', { fontSize: '18px', fill: '#ffd700' });
-                this.add.text(20, 100, '点击攻击或治疗按钮', { fontSize: '16px', fill: '#aaa' });
-            },
-            attack: function() {
-                if (!this.isHeroTurn || this.isGameOver) return;
-                
-                const damage = Phaser.Math.Between(15, 25);
-                this.dragonHP -= damage;
-                this.dragonHP = Math.max(0, this.dragonHP);
-                
-                this.logText.setText('你造成 ' + damage + ' 点伤害！');
-                this.updateHPBars();
-                
-                if (this.dragonHP <= 0) {
-                    this.win();
-                    return;
-                }
-                
-                this.isHeroTurn = false;
-                this.time.delayedCall(1000, () => this.dragonAttack());
-            },
-            heal: function() {
-                if (!this.isHeroTurn || this.isGameOver) return;
-                
-                const heal = Phaser.Math.Between(15, 25);
-                this.heroHP += heal;
-                this.heroHP = Math.min(this.heroMaxHP, this.heroHP);
-                
-                this.logText.setText('你恢复 ' + heal + ' 点生命！');
-                this.updateHPBars();
-                
-                this.isHeroTurn = false;
-                this.time.delayedCall(1000, () => this.dragonAttack());
-            },
-            dragonAttack: function() {
-                if (this.isGameOver) return;
-                
-                const damage = Phaser.Math.Between(10, 20);
-                this.heroHP -= damage;
-                this.heroHP = Math.max(0, this.heroHP);
-                
-                this.logText.setText('恶龙造成 ' + damage + ' 点伤害！');
-                this.updateHPBars();
-                
-                if (this.heroHP <= 0) {
-                    this.lose();
-                    return;
-                }
-                
-                this.isHeroTurn = true;
-                this.time.delayedCall(500, () => this.logText.setText('轮到你行动了！'));
-            },
-            updateHPBars: function() {
-                this.heroHPBar.width = (this.heroHP / this.heroMaxHP) * 100;
-                this.dragonHPBar.width = (this.dragonHP / this.dragonMaxHP) * 100;
-                this.heroHPText.setText(this.heroHP + '/' + this.heroMaxHP);
-                this.dragonHPText.setText(this.dragonHP + '/' + this.dragonMaxHP);
-            },
-            win: function() {
-                this.isGameOver = true;
-                this.add.text(this.scale.width/2, this.scale.height/2, '🎉 胜利！点击重玩', { fontSize: '32px', fill: '#ffd700' }).setOrigin(0.5);
-                this.input.once('pointerdown', () => this.scene.restart());
-            },
-            lose: function() {
-                this.isGameOver = true;
-                this.add.text(this.scale.width/2, this.scale.height/2, '💀 失败！点击重玩', { fontSize: '32px', fill: '#f56565' }).setOrigin(0.5);
-                this.input.once('pointerdown', () => this.scene.restart());
-            }
-        };
-        
-        // 游戏5: 赛车 - 点击左右或方向键切换车道
-        const RacingScene = {
-            key: 'RacingScene',
-            preload: function() {
-                const g = this.make.graphics({ x: 0, y: 0, add: false });
-                g.fillStyle(0x667eea); g.fillRect(0, 0, 40, 60); g.generateTexture('car', 40, 60);
-                g.clear(); g.fillStyle(0xf56565); g.fillRect(0, 0, 40, 60); g.generateTexture('obstacle_car', 40, 60);
-            },
-            create: function() {
-                this.score = 0;
-                this.isGameOver = false;
-                const w = this.scale.width;
-                const h = this.scale.height;
-                this.lanes = [w * 0.25, w * 0.5, w * 0.75];
-                this.currentLane = 1;
-                this.gameSpeed = 200;
-                
-                // 道路线
-                this.add.rectangle(w * 0.375, h / 2, 5, h, 0x48bb78);
-                this.add.rectangle(w * 0.625, h / 2, 5, h, 0x48bb78);
-                
-                // 玩家
-                this.player = this.physics.add.sprite(this.lanes[this.currentLane], h - 150, 'car');
-                this.player.body.allowGravity = false;
-                
-                // 障碍车
-                this.obstacles = this.physics.add.group();
-                
-                this.physics.add.overlap(this.player, this.obstacles, () => {
-                    this.gameOver();
-                });
-                
-                // 定时生成障碍
-                this.spawnEvent = this.time.addEvent({ 
-                    delay: 1500, 
-                    callback: () => {
-                        if (this.isGameOver) return;
-                        const lane = Phaser.Math.Between(0, 2);
-                        const obs = this.obstacles.create(this.lanes[lane], -50, 'obstacle_car');
-                        obs.body.allowGravity = false;
-                        obs.setVelocityY(this.gameSpeed);
-                    }, 
-                    loop: true 
-                });
-                
-                // 控制 - 点击左右半屏
-                this.input.on('pointerdown', (pointer) => {
-                    if (this.isGameOver) return;
-                    if (pointer.x < this.scale.width / 2) {
-                        this.currentLane = Math.max(0, this.currentLane - 1);
+                state.isHeroTurn = false;
+                setTimeout(() => {
+                    if (state.gameOver) return;
+                    const dmg = 10 + Math.floor(Math.random() * 11);
+                    state.heroHP = Math.max(0, state.heroHP - dmg);
+                    state.log = '恶龙造成 ' + dmg + ' 点伤害！';
+                    
+                    if (state.heroHP <= 0) {
+                        state.gameOver = true;
                     } else {
-                        this.currentLane = Math.min(2, this.currentLane + 1);
+                        setTimeout(() => {
+                            state.isHeroTurn = true;
+                            state.log = '轮到你行动了！';
+                        }, 500);
                     }
-                    this.player.x = this.lanes[this.currentLane];
-                });
+                }, 800);
                 
-                // 键盘控制
-                this.input.keyboard.on('keydown-LEFT', () => {
-                    if (!this.isGameOver) {
-                        this.currentLane = Math.max(0, this.currentLane - 1);
-                        this.player.x = this.lanes[this.currentLane];
-                    }
-                });
-                
-                this.input.keyboard.on('keydown-RIGHT', () => {
-                    if (!this.isGameOver) {
-                        this.currentLane = Math.min(2, this.currentLane + 1);
-                        this.player.x = this.lanes[this.currentLane];
-                    }
-                });
-                
-                // UI
-                this.scoreText = this.add.text(20, 60, '分数: 0', { fontSize: '24px', fill: '#fff' });
-                this.add.text(20, 100, '点击左/右半屏或←→键切换车道', { fontSize: '16px', fill: '#aaa' });
-                
-                // 计分
-                this.scoreEvent = this.time.addEvent({ 
-                    delay: 100, 
-                    callback: () => {
-                        if (!this.isGameOver) {
-                            this.score++;
-                            this.scoreText.setText('分数: ' + this.score);
-                        }
-                    }, 
-                    loop: true 
-                });
-            },
-            update: function() {
-                if (this.isGameOver) return;
-                this.obstacles.children.iterate(o => {
-                    if (o && o.y > this.scale.height + 50) {
-                        o.destroy();
-                    }
-                });
-            },
-            gameOver: function() {
-                this.isGameOver = true;
-                this.spawnEvent.remove();
-                this.scoreEvent.remove();
-                this.physics.pause();
-                this.add.text(this.scale.width/2, this.scale.height/2, '游戏结束！点击重玩', { fontSize: '24px', fill: '#fff' }).setOrigin(0.5);
-                this.input.once('pointerdown', () => this.scene.restart());
+                break;
             }
-        };
-        
-        // 游戏6: 跳跃小鸟 - 点击或空格飞行
-        const FlappyScene = {
-            key: 'FlappyScene',
-            preload: function() {
-                const g = this.make.graphics({ x: 0, y: 0, add: false });
-                g.fillStyle(0xffd700); g.fillCircle(15, 15, 15); g.generateTexture('bird', 30, 30);
-                g.clear(); g.fillStyle(0x48bb78); g.fillRect(0, 0, 60, 400); g.generateTexture('pipe', 60, 400);
-            },
-            create: function() {
-                this.score = 0;
-                this.isGameOver = false;
-                const w = this.scale.width;
-                const h = this.scale.height;
-                
-                // 玩家
-                this.player = this.physics.add.sprite(100, h / 2, 'bird');
-                this.player.setCollideWorldBounds(true);
-                
-                // 管道组
-                this.pipes = this.physics.add.group();
-                
-                this.physics.add.overlap(this.player, this.pipes, () => {
-                    this.gameOver();
-                });
-                
-                // 定时生成管道
-                this.spawnEvent = this.time.addEvent({ 
-                    delay: 2000, 
-                    callback: () => {
-                        if (this.isGameOver) return;
-                        
-                        const gap = 180;
-                        const gapY = Phaser.Math.Between(150, h - 150);
-                        
-                        // 上管
-                        const topPipe = this.pipes.create(w + 30, gapY - gap / 2 - 200, 'pipe');
-                        topPipe.body.allowGravity = false;
-                        topPipe.setVelocityX(-150);
-                        
-                        // 下管
-                        const bottomPipe = this.pipes.create(w + 30, gapY + gap / 2 + 200, 'pipe');
-                        bottomPipe.body.allowGravity = false;
-                        bottomPipe.setVelocityX(-150);
-                    }, 
-                    loop: true 
-                });
-                
-                // 控制
-                this.input.on('pointerdown', () => this.flap());
-                this.input.keyboard.on('keydown-SPACE', () => this.flap());
-                
-                // UI
-                this.scoreText = this.add.text(20, 60, '分数: 0', { fontSize: '24px', fill: '#fff' });
-                this.add.text(20, 100, '点击屏幕或按空格键飞行', { fontSize: '16px', fill: '#aaa' });
-                
-                // 计分
-                this.scoreEvent = this.time.addEvent({ 
-                    delay: 100, 
-                    callback: () => {
-                        if (!this.isGameOver) {
-                            this.score++;
-                            this.scoreText.setText('分数: ' + this.score);
-                        }
-                    }, 
-                    loop: true 
-                });
-            },
-            update: function() {
-                if (this.isGameOver) return;
-                
-                this.pipes.children.iterate(p => {
-                    if (p && p.x < -60) p.destroy();
-                });
-                
-                // 碰到地面或天花板
-                if (this.player.y >= this.scale.height - 30 || this.player.y <= 30) {
-                    this.gameOver();
-                }
-            },
-            flap: function() {
-                if (!this.isGameOver) {
-                    this.player.setVelocityY(-250);
-                }
-            },
-            gameOver: function() {
-                this.isGameOver = true;
-                this.spawnEvent.remove();
-                this.scoreEvent.remove();
-                this.physics.pause();
-                this.add.text(this.scale.width/2, this.scale.height/2, '游戏结束！点击重玩', { fontSize: '24px', fill: '#fff' }).setOrigin(0.5);
-                this.input.once('pointerdown', () => this.scene.restart());
-                this.input.keyboard.once('keydown-SPACE', () => this.scene.restart());
-            }
-        };
+        }
+    }
+    
+    reset();
+    document.getElementById('hint').textContent = '点击按钮攻击或治疗';
+    
+    canvas.addEventListener('click', handleClick);
+    canvas.addEventListener('touchstart', (e) => { e.preventDefault(); handleClick(e); }, { passive: false });
+    
+    state.clickHandler = handleClick;
+    loop();
+    
+    return {
+        restart: () => {
+            canvas.removeEventListener('click', state.clickHandler);
+            canvas.removeEventListener('touchstart', state.clickHandler);
+            reset();
+        }
+    };
+}
 
-        // ============ Vue 应用 ============
+// ============ 游戏5: 赛车 ============
+function startRacing() {
+    const state = {
+        playerLane: 1,
+        lanes: [],
+        obstacles: [],
+        score: 0,
+        gameOver: false,
+        speed: 5,
+        carW: 36,
+        carH: 55
+    };
+    
+    function reset() {
+        resizeCanvas();
+        state.lanes = [
+            canvas.width * 0.25,
+            canvas.width * 0.5,
+            canvas.width * 0.75
+        ];
+        state.playerLane = 1;
+        state.obstacles = [];
+        state.score = 0;
+        state.gameOver = false;
+        state.speed = 5;
+    }
+    
+    function update() {
+        if (state.gameOver) return;
         
-        createApp({
-            data() {
-                return {
-                    isPlaying: false,
-                    currentGame: null,
-                    gameInstance: null,
-                    toast: { show: false, message: '' },
-                    
-                    games: [
-                        { id: 1, title: '超级跑酷', icon: '🏃', type: '跑酷', scene: 'RunnerScene' },
-                        { id: 2, title: '像素射击', icon: '🎯', type: '射击', scene: 'ShooterScene' },
-                        { id: 3, title: '数字滑块', icon: '🧩', type: '解谜', scene: 'PuzzleScene' },
-                        { id: 4, title: '勇者斗龙', icon: '⚔️', type: 'RPG', scene: 'RPGScene' },
-                        { id: 5, title: '极速赛车', icon: '🏎️', type: '竞速', scene: 'RacingScene' },
-                        { id: 6, title: '跳跃小鸟', icon: '🐦', type: '休闲', scene: 'FlappyScene' }
-                    ]
-                };
-            },
+        // 生成障碍
+        if (Math.random() < 0.025) {
+            const lane = Math.floor(Math.random() * 3);
+            // 避免同车道连续
+            const lastObs = state.obstacles.filter(o => o.lane === lane);
+            if (lastObs.length === 0 || lastObs[lastObs.length - 1].y > 100) {
+                state.obstacles.push({ lane: lane, y: -60 });
+            }
+        }
+        
+        // 移动障碍
+        for (let o of state.obstacles) {
+            o.y += state.speed;
+        }
+        state.obstacles = state.obstacles.filter(o => o.y < canvas.height + 80);
+        
+        // 碰撞检测
+        const playerX = state.lanes[state.playerLane];
+        const playerY = canvas.height - 140;
+        for (let o of state.obstacles) {
+            const ox = state.lanes[o.lane];
+            if (Math.abs(playerX - ox) < state.carW * 0.8 && Math.abs(playerY - o.y) < state.carH * 0.8) {
+                state.gameOver = true;
+            }
+        }
+        
+        // 计分
+        state.score++;
+    }
+    
+    function draw() {
+        ctx.fillStyle = '#2d3436';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // 道路边界
+        ctx.fillStyle = '#666';
+        ctx.fillRect(0, 0, 10, canvas.height);
+        ctx.fillRect(canvas.width - 10, 0, 10, canvas.height);
+        
+        // 车道线
+        ctx.fillStyle = '#48bb78';
+        for (let l of state.lanes) {
+            if (state.lanes.indexOf(l) === 1) continue;
+            ctx.fillRect(l - 2, 0, 4, canvas.height);
+        }
+        
+        // 虚线路面
+        ctx.setLineDash([40, 30]);
+        ctx.strokeStyle = '#555';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(state.lanes[0] + (state.lanes[1] - state.lanes[0]) / 2, 0);
+        ctx.lineTo(state.lanes[0] + (state.lanes[1] - state.lanes[0]) / 2, canvas.height);
+        ctx.moveTo(state.lanes[1] + (state.lanes[2] - state.lanes[1]) / 2, 0);
+        ctx.lineTo(state.lanes[1] + (state.lanes[2] - state.lanes[1]) / 2, canvas.height);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        
+        // 障碍车
+        ctx.fillStyle = '#f56565';
+        for (let o of state.obstacles) {
+            const ox = state.lanes[o.lane];
+            ctx.fillRect(ox - state.carW/2, o.y - state.carH/2, state.carW, state.carH);
+        }
+        
+        // 玩家车
+        const px = state.lanes[state.playerLane];
+        const py = canvas.height - 140;
+        ctx.fillStyle = '#667eea';
+        ctx.fillRect(px - state.carW/2, py - state.carH/2, state.carW, state.carH);
+        // 车轮
+        ctx.fillStyle = '#333';
+        ctx.fillRect(px - state.carW/2 - 5, py - 15, 8, 20);
+        ctx.fillRect(px + state.carW/2 - 3, py - 15, 8, 20);
+        ctx.fillRect(px - state.carW/2 - 5, py + 10, 8, 20);
+        ctx.fillRect(px + state.carW/2 - 3, py + 10, 8, 20);
+        
+        document.getElementById('score-display').textContent = '分数: ' + state.score;
+        
+        if (state.gameOver) {
+            ctx.fillStyle = 'rgba(0,0,0,0.6)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            drawText('游戏结束！', canvas.width/2, canvas.height/2 - 20, 28, '#fff', 'center');
+            drawText('点击重新开始', canvas.width/2, canvas.height/2 + 20, 18, '#aaa', 'center');
+        }
+    }
+    
+    function loop() {
+        update();
+        draw();
+        animationId = requestAnimationFrame(loop);
+    }
+    
+    function switchLane(dir) {
+        if (state.gameOver) return;
+        state.playerLane = Math.max(0, Math.min(2, state.playerLane + dir));
+    }
+    
+    function handleClick(e) {
+        if (state.gameOver) {
+            reset();
+            return;
+        }
+        const rect = canvas.getBoundingClientRect();
+        const clickX = e.clientX || e.touches[0].clientX;
+        if (clickX < canvas.width / 2) {
+            switchLane(-1);
+        } else {
+            switchLane(1);
+        }
+    }
+    
+    reset();
+    document.getElementById('hint').textContent = '点击左/右半屏切换车道';
+    
+    canvas.addEventListener('click', handleClick);
+    canvas.addEventListener('touchstart', (e) => { e.preventDefault(); handleClick(e); }, { passive: false });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowLeft') switchLane(-1);
+        if (e.key === 'ArrowRight') switchLane(1);
+    });
+    
+    state.clickHandler = handleClick;
+    state.keyHandler = (e) => {
+        if (e.key === 'ArrowLeft') switchLane(-1);
+        if (e.key === 'ArrowRight') switchLane(1);
+    };
+    loop();
+    
+    return {
+        restart: () => {
+            canvas.removeEventListener('click', state.clickHandler);
+            canvas.removeEventListener('touchstart', state.clickHandler);
+            document.removeEventListener('keydown', state.keyHandler);
+            reset();
+        }
+    };
+}
+
+// ============ 游戏6: 跳跃小鸟 ============
+function startFlappy() {
+    const state = {
+        bird: { x: 0, y: 0, vy: 0, r: 15 },
+        pipes: [],
+        score: 0,
+        gameOver: false,
+        pipeGap: 160,
+        pipeSpeed: 3,
+        passedPipes: new Set()
+    };
+    
+    function reset() {
+        resizeCanvas();
+        state.bird.x = 80;
+        state.bird.y = canvas.height / 2;
+        state.bird.vy = 0;
+        state.pipes = [];
+        state.score = 0;
+        state.gameOver = false;
+        state.passedPipes = new Set();
+    }
+    
+    function flap() {
+        if (state.gameOver) {
+            reset();
+            return;
+        }
+        state.bird.vy = -7;
+    }
+    
+    function update() {
+        if (state.gameOver) return;
+        
+        // 重力
+        state.bird.vy += 0.35;
+        state.bird.y += state.bird.vy;
+        
+        // 边界
+        if (state.bird.y <= state.bird.r || state.bird.y >= canvas.height - state.bird.r) {
+            state.gameOver = true;
+            return;
+        }
+        
+        // 生成管道
+        if (state.pipes.length === 0 || state.pipes[state.pipes.length - 1].x < canvas.width - 200) {
+            const gapY = 150 + Math.random() * (canvas.height - 300);
+            state.pipes.push({
+                x: canvas.width + 60,
+                gapY: gapY,
+                id: Date.now()
+            });
+        }
+        
+        // 移动管道
+        for (let p of state.pipes) {
+            p.x -= state.pipeSpeed;
+        }
+        state.pipes = state.pipes.filter(p => p.x > -70);
+        
+        // 计分（穿过管道）
+        for (let p of state.pipes) {
+            if (!state.passedPipes.has(p.id) && p.x + 30 < state.bird.x) {
+                state.passedPipes.add(p.id);
+                state.score++;
+            }
+        }
+        
+        // 碰撞检测
+        for (let p of state.pipes) {
+            const topH = p.gapY - state.pipeGap / 2;
+            const bottomY = p.gapY + state.pipeGap / 2;
+            const pipeW = 60;
             
-            methods: {
-                showToast(msg) {
-                    this.toast.message = msg;
-                    this.toast.show = true;
-                    setTimeout(() => this.toast.show = false, 2000);
-                },
-                
-                playGame(game) {
-                    this.currentGame = game;
-                    this.isPlaying = true;
-                    
-                    this.$nextTick(() => {
-                        const sceneMap = {
-                            'RunnerScene': RunnerScene,
-                            'ShooterScene': ShooterScene,
-                            'PuzzleScene': PuzzleScene,
-                            'RPGScene': RPGScene,
-                            'RacingScene': RacingScene,
-                            'FlappyScene': FlappyScene
-                        };
-                        
-                        const config = {
-                            type: Phaser.AUTO,
-                            parent: 'phaser-game',
-                            width: window.innerWidth,
-                            height: window.innerHeight,
-                            backgroundColor: '#1a1a2e',
-                            physics: {
-                                default: 'arcade',
-                                arcade: { gravity: { y: 300 }, debug: false }
-                            },
-                            scene: sceneMap[game.scene]
-                        };
-                        
-                        this.gameInstance = new Phaser.Game(config);
-                    });
-                },
-                
-                exitGame() {
-                    if (this.gameInstance) {
-                        this.gameInstance.destroy(true);
-                        this.gameInstance = null;
-                    }
-                    this.isPlaying = false;
-                    this.currentGame = null;
+            if (state.bird.x + state.bird.r > p.x && state.bird.x - state.bird.r < p.x + pipeW) {
+                if (state.bird.y - state.bird.r < topH || state.bird.y + state.bird.r > bottomY) {
+                    state.gameOver = true;
+                    return;
                 }
             }
-        }).mount('#app');
-    </script>
+        }
+    }
+    
+    function draw() {
+        ctx.fillStyle = '#87CEEB';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // 云朵
+        ctx.fillStyle = 'rgba(255,255,255,0.6)';
+        for (let i = 0; i < 5; i++) {
+            const cx = (i * 200 + 50) % (canvas.width + 100) - 50;
+            ctx.beginPath();
+            ctx.arc(cx, 80 + i * 10, 30, 0, Math.PI * 2);
+            ctx.arc(cx + 25, 75 + i * 10, 25, 0, Math.PI * 2);
+            ctx.arc(cx + 50, 80 + i * 10, 30, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        // 地面
+        ctx.fillStyle = '#8B4513';
+        ctx.fillRect(0, canvas.height - 20, canvas.width, 20);
+        
+        // 管道
+        ctx.fillStyle = '#2ecc71';
+        for (let p of state.pipes) {
+            const topH = p.gapY - state.pipeGap / 2;
+            const bottomY = p.gapY + state.pipeGap / 2;
+            const pipeW = 60;
+            
+            // 上管道
+            ctx.fillStyle = '#2ecc71';
+            ctx.fillRect(p.x, 0, pipeW, topH);
+            ctx.fillStyle = '#27ae60';
+            ctx.fillRect(p.x + 5, 0, pipeW - 10, topH);
+            
+            // 上管道底部边框
+            ctx.fillStyle = '#27ae60';
+            ctx.fillRect(p.x, topH - 20, pipeW, 20);
+            
+            // 下管道
+            ctx.fillStyle = '#2ecc71';
+            ctx.fillRect(p.x, bottomY, pipeW, canvas.height - bottomY - 20);
+            ctx.fillStyle = '#27ae60';
+            ctx.fillRect(p.x + 5, bottomY + 10, pipeW - 10, canvas.height - bottomY - 30);
+            
+            // 下管道顶部边框
+            ctx.fillStyle = '#27ae60';
+            ctx.fillRect(p.x, bottomY, pipeW, 20);
+        }
+        
+        // 小鸟
+        ctx.fillStyle = '#f39c12';
+        ctx.beginPath();
+        ctx.arc(state.bird.x, state.bird.y, state.bird.r, 0, Math.PI * 2);
+        ctx.fill();
+        // 眼睛
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(state.bird.x + 5, state.bird.y - 3, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#000';
+        ctx.beginPath();
+        ctx.arc(state.bird.x + 7, state.bird.y - 3, 3, 0, Math.PI * 2);
+        ctx.fill();
+        // 嘴巴
+        ctx.fillStyle = '#e74c3c';
+        ctx.beginPath();
+        ctx.moveTo(state.bird.x + state.bird.r, state.bird.y);
+        ctx.lineTo(state.bird.x + state.bird.r + 10, state.bird.y + 3);
+        ctx.lineTo(state.bird.x + state.bird.r, state.bird.y + 6);
+        ctx.fill();
+        
+        document.getElementById('score-display').textContent = '分数: ' + state.score;
+        
+        if (state.gameOver) {
+            ctx.fillStyle = 'rgba(0,0,0,0.5)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            drawText('游戏结束！', canvas.width/2, canvas.height/2 - 20, 28, '#fff', 'center');
+            drawText('分数: ' + state.score + '  点击重新开始', canvas.width/2, canvas.height/2 + 20, 18, '#aaa', 'center');
+        }
+    }
+    
+    function loop() {
+        update();
+        draw();
+        animationId = requestAnimationFrame(loop);
+    }
+    
+    reset();
+    document.getElementById('hint').textContent = '点击屏幕或按空格键飞行';
+    
+    const handler = (e) => { e.preventDefault(); flap(); };
+    canvas.addEventListener('mousedown', handler);
+    canvas.addEventListener('touchstart', handler, { passive: false });
+    document.addEventListener('keydown', (e) => { if (e.code === 'Space') { e.preventDefault(); flap(); } });
+    
+    state.handler = handler;
+    loop();
+    
+    return {
+        restart: () => {
+            canvas.removeEventListener('mousedown', state.handler);
+            canvas.removeEventListener('touchstart', state.handler);
+            reset();
+        }
+    };
+}
+
+// ============ 游戏启动器 ============
+const gameNames = ['', '超级跑酷', '像素射击', '数字滑块', '勇者斗龙', '极速赛车', '跳跃小鸟'];
+const gameStarts = [null, startRunner, startShooter, startPuzzle, startRPG, startRacing, startFlappy];
+
+function startGame(id) {
+    // 停止之前的游戏
+    if (animationId) {
+        cancelAnimationFrame(animationId);
+        animationId = null;
+    }
+    
+    document.getElementById('menu').style.display = 'none';
+    document.getElementById('game-page').classList.add('active');
+    document.getElementById('game-title').textContent = '🎮 ' + gameNames[id];
+    document.getElementById('score-display').textContent = '';
+    document.getElementById('hint').textContent = '';
+    
+    resizeCanvas();
+    
+    // 启动游戏
+    if (id === 1) currentGame = startRunner();
+    else if (id === 2) currentGame = startShooter();
+    else if (id === 3) currentGame = startPuzzle();
+    else if (id === 4) currentGame = startRPG();
+    else if (id === 5) currentGame = startRacing();
+    else if (id === 6) currentGame = startFlappy();
+}
+
+function exitGame() {
+    if (animationId) {
+        cancelAnimationFrame(animationId);
+        animationId = null;
+    }
+    currentGame = null;
+    document.getElementById('game-page').classList.remove('active');
+    document.getElementById('menu').style.display = 'block';
+    document.getElementById('score-display').textContent = '';
+    document.getElementById('hint').textContent = '';
+}
+
+window.addEventListener('resize', () => {
+    if (currentGame && currentGame.restart) {
+        // 游戏运行中，重启游戏
+        if (animationId) cancelAnimationFrame(animationId);
+        const gameId = gameStarts.indexOf(currentGame);
+        // 重新启动当前游戏
+    }
+});
+</script>
 </body>
 </html>
